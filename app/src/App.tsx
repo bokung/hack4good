@@ -1,38 +1,28 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from '/vite.svg'
-import './App.css'
+import React, { useState } from 'react'
+import MeetingArranger from './components/MeetingArranger'
+import TaskScheduler from './components/TaskScheduler'
+import NotificationManager from './components/NotificationManager'
+import EmailSummarizer from './components/EmailSummarizer'
 
 function App() {
-  const [count, setCount] = useState(0)
-  const openApiKey = import.meta.env.VITE_OPENAI_API_KEY
+  const [activeTab, setActiveTab] = useState<'meeting' | 'tasks' | 'summarizer' | 'notifications'>('meeting')
 
   return (
-    <>
-      <div>
-        <a href="https://vite.dev" target="_blank">
-          <img src={viteLogo} className="logo" alt="Vite logo" />
-        </a>
-        <a href="https://react.dev" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
-      </div>
-      <h1>Vite + React</h1>
-      <div className="card">
-        <button onClick={() => setCount((count) => count + 1)}>
-          count is {count}
-        </button>
-        <p>
-          Edit <code>src/App.tsx</code> and save to test HMR
-        </p>
-        <p>
-          This is the openai api key = {openApiKey}
-        </p>
-      </div>
-      <p className="read-the-docs">
-        Click on the Vite and React logos to learn more
-      </p>
-    </>
+    <div style={{ width: '100%', maxWidth: '900px', margin: '2rem auto' }}>
+      <h1>Digital PA System</h1>
+
+      <nav style={{ marginBottom: '2rem' }}>
+        <button onClick={() => setActiveTab('meeting')}>Arrange Meeting</button>
+        <button onClick={() => setActiveTab('tasks')}>Task Scheduler</button>
+        <button onClick={() => setActiveTab('summarizer')}>Email Summarizer</button>
+        <button onClick={() => setActiveTab('notifications')}>Notifications</button>
+      </nav>
+
+      {activeTab === 'meeting' && <MeetingArranger />}
+      {activeTab === 'tasks' && <TaskScheduler />}
+      {activeTab === 'summarizer' && <EmailSummarizer />}
+      {activeTab === 'notifications' && <NotificationManager />}
+    </div>
   )
 }
 
