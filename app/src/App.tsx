@@ -1,4 +1,6 @@
-import React, { useState } from 'react'
+import * as React from 'react'
+import { useState } from 'react'
+
 import MeetingArranger from './components/MeetingArranger'
 import TaskScheduler from './components/TaskScheduler'
 import NotificationManager from './components/NotificationManager'
