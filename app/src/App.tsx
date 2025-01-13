@@ -5,6 +5,7 @@ import './App.css'
 
 function App() {
   const [count, setCount] = useState(0)
+  const openApiKey = import.meta.env.VITE_OPENAI_API_KEY
 
   return (
     <>
@@ -23,6 +24,9 @@ function App() {
         </button>
         <p>
           Edit <code>src/App.tsx</code> and save to test HMR
+        </p>
+        <p>
+          This is the openai api key = {openApiKey}
         </p>
       </div>
       <p className="read-the-docs">
