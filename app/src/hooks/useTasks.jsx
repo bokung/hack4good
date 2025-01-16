@@ -1,11 +1,10 @@
 import { useState } from 'react'
-import { Task } from '../types'
 
 function useTasks() {
-  const [tasks, setTasks] = useState<Task[]>([])
+  const [tasks, setTasks] = useState([])
 
-  const addTask = (description: string, assignedTo: string, dueDate: string) => {
-    const newTask: Task = {
+  const addTask = (description, assignedTo, dueDate) => {
+    const newTask = {
       id: Math.random().toString(36).substr(2, 9),
       description,
       assignedTo,
@@ -15,7 +14,7 @@ function useTasks() {
     setTasks(prev => [...prev, newTask])
   }
 
-  const completeTask = (taskId: string) => {
+  const completeTask = (taskId) => {
     setTasks(prev => prev.map(t => t.id === taskId ? { ...t, completed: true } : t))
   }
 

@@ -2,7 +2,7 @@ import * as React from 'react'
 import { useState } from 'react'
 
 function NotificationManager() {
-  const [reminders, setReminders] = useState<string[]>([])
+  const [reminders, setReminders] = useState([])
   const [newReminder, setNewReminder] = useState('')
 
   const addReminder = () => {

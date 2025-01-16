@@ -8,26 +8,11 @@ import NotificationManager from './components/NotificationManager'
 import EmailSummarizer from './components/EmailSummarizer'
 
 function App() {
-  const [activeTab, setActiveTab] = useState<'meeting' | 'tasks' | 'summarizer' | 'notifications'>('meeting')
+  const [activeTab, setActiveTab] = useState('meeting')
 
   return (
     <div style={{ width: '100%', maxWidth: '900px', margin: '2rem auto' }}>
-      <h1 className="title"> Digital PA System</h1>
-
-      <div className="animated-bg"></div>
-      <div className="animated-bg-rotating"></div>
-      <div className="animated-bg-pulse"></div>
-      <div className="starfield"></div>
-
-      <div className="floating-shapes">
-        <div className="shape shape1"></div>
-        <div className="shape shape2"></div>
-        <div className="shape shape3"></div>
-        <div className="shape shape4"></div>
-        <div className="shape shape5"></div>
-      </div>
-
-      <div className="confetti"></div>
+      <h1 className="title"> TaskSage</h1>
 
       <nav style={{ marginBottom: '2rem' }}>
         <button onClick={() => setActiveTab('meeting')}>Arrange Meeting</button>
