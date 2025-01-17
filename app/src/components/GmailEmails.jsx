@@ -2,8 +2,56 @@
 
 import React, { useState, useEffect } from 'react';
 import { generateSummary } from '../services/mockAi';
+import { decode } from 'js-base64';
 
 const CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID;
+
+/**
+ * Retrieve the full text/plain body from the Gmail API's message payload.
+ * Fallback to snippet if there isn't a text/plain part.
+ */
+function extractFullEmailBody(detailData) {
+  if (!detailData.payload) {
+    // Fallback to snippet if there's no payload
+    return detailData.snippet || '(No content)';
+  }
+
+  // If the message has multiple parts, look for the text/plain part
+  const parts = detailData.payload.parts;
+  if (parts && parts.length > 0) {
+    // Attempt to locate a text/plain part
+    for (const part of parts) {
+      if (part.mimeType === 'text/plain' && part.body && part.body.data) {
+        // Decode the Base64-URL-encoded message
+        return decode(part.body.data.replace(/-/g, '+').replace(/_/g, '/'));
+      }
+      // Some emails nest parts recursively
+      if (part.parts && part.parts.length > 0) {
+        for (const nestedPart of part.parts) {
+          if (
+            nestedPart.mimeType === 'text/plain' &&
+            nestedPart.body &&
+            nestedPart.body.data
+          ) {
+            return decode(
+              nestedPart.body.data.replace(/-/g, '+').replace(/_/g, '/')
+            );
+          }
+        }
+      }
+    }
+  }
+
+  // If there's a single-part email in the body
+  if (detailData.payload.body && detailData.payload.body.data) {
+    return decode(
+      detailData.payload.body.data.replace(/-/g, '+').replace(/_/g, '/')
+    );
+  }
+
+  // If no text/plain content was found, fallback to snippet
+  return detailData.snippet || '(No content)';
+}
 
 function GmailEmails() {
   const [accessToken, setAccessToken] = useState(null);
@@ -101,12 +149,13 @@ function GmailEmails() {
     }
   };
 
-  // Fetch up to 100 emails (message IDs)
+  // Fetch up to 100 inbox emails (message IDs)
   const fetchEmails = async (token) => {
     setError(null);
     try {
+      // Request the latest 100 messages in the INBOX
       const listResponse = await fetch(
-        'https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=100',
+        'https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=10&labelIds=INBOX',
         {
           headers: {
             Authorization: `Bearer ${token}`,
@@ -120,7 +169,7 @@ function GmailEmails() {
         return;
       }
 
-      // For each message, fetch the snippet
+      // For each message, fetch the detail (snippet + internalDate + full body)
       const emailPromises = listData.messages.map(async (message) => {
         const detailResponse = await fetch(
           `https://gmail.googleapis.com/gmail/v1/users/me/messages/${message.id}`,
@@ -131,11 +180,21 @@ function GmailEmails() {
           }
         );
         const detailData = await detailResponse.json();
-        return detailData.snippet || '(No snippet)';
+
+        return {
+          snippet: detailData.snippet || '(No snippet)',
+          internalDate: parseInt(detailData.internalDate, 10) || 0,
+          body: extractFullEmailBody(detailData), // <--- Full body extracted here
+        };
       });
 
-      const emailSnippets = await Promise.all(emailPromises);
-      setEmails(emailSnippets);
+      // Wait for all details, then sort by `internalDate` descending (newest first)
+      const emailDetails = await Promise.all(emailPromises);
+      const sortedEmails = emailDetails.sort(
+        (a, b) => b.internalDate - a.internalDate
+      );
+
+      setEmails(sortedEmails);
       setSummaries([]); // Clear old summaries when new emails are fetched
     } catch (err) {
       console.error('Error fetching emails:', err);
@@ -143,15 +202,16 @@ function GmailEmails() {
     }
   };
 
-  // Generate a summary for each fetched email snippet
+  // Generate a summary for each fetched email's body
   const handleSummaries = async () => {
     setLoadingSummaries(true);
     setSummaries([]);
     const newSummaries = [];
 
-    for (const snippet of emails) {
+    for (const emailObj of emails) {
       try {
-        const summary = await generateSummary(snippet);
+        // Pass the full body instead of just the snippet
+        const summary = await generateSummary(emailObj.body);
         newSummaries.push(summary);
       } catch (err) {
         console.error('Error summarizing snippet:', err);
@@ -170,23 +230,23 @@ function GmailEmails() {
     }
   };
 
-  // Automatically poll for new emails every 5 seconds when signed in
-  useEffect(() => {
-    let intervalId;
-    if (accessToken) {
-      intervalId = setInterval(() => {
-        fetchEmails(accessToken);
-      }, 5000);
-    }
-    return () => {
-      if (intervalId) clearInterval(intervalId);
-    };
-  }, [accessToken]);
+  // // Automatically poll for new emails every 5 seconds when signed in
+  // useEffect(() => {
+  //   let intervalId;
+  //   if (accessToken) {
+  //     intervalId = setInterval(() => {
+  //       fetchEmails(accessToken);
+  //     }, 5000);
+  //   }
+  //   return () => {
+  //     if (intervalId) clearInterval(intervalId);
+  //   };
+  // }, [accessToken]);
 
   return (
     <div style={{ border: '1px solid #ddd', padding: '1rem', marginTop: '1rem' }}>
       <h2 style={{ fontSize: '1.25rem', marginBottom: '1rem' }}>
-        Gmail Integration (Up to 100 Emails)
+        Gmail Account Integration (Latest 100 Emails in Your Inbox)
       </h2>
 
       {error && <p style={{ color: 'red', marginBottom: '1rem' }}>Error: {error}</p>}
@@ -221,7 +281,7 @@ function GmailEmails() {
                 Showing {emails.length} Email Snippets
               </h3>
               <ul style={{ paddingLeft: '1rem', marginBottom: '1rem' }}>
-                {emails.map((snippet, i) => (
+                {emails.map((emailObj, i) => (
                   <li
                     key={i}
                     style={{
@@ -230,7 +290,7 @@ function GmailEmails() {
                       padding: '0.5rem 0',
                     }}
                   >
-                    <strong>Email {i + 1}:</strong> {snippet}
+                    <strong>Email {i + 1}:</strong> {emailObj.snippet}
                   </li>
                 ))}
               </ul>

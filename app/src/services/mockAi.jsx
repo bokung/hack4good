@@ -16,7 +16,7 @@ export async function generateSummary(emailThread){
     model: "gpt-4o-mini",
     store: true,
     messages: [
-      {"role": "user", "content": `Summarize this email thread: ${emailThread}`},
+      {"role": "user", "content": `Summarize this email thread in 30 words or less: ${emailThread}`},
     ],
   });
 
