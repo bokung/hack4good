@@ -12,8 +12,19 @@ function GmailEmails() {
   const [loadingSummaries, setLoadingSummaries] = useState(false);
   const [error, setError] = useState(null);
 
-  // Load Google script once
+  // On component mount, attempt to read an existing token from the cookie
   useEffect(() => {
+    const tokenCookie = document.cookie
+      .split('; ')
+      .find((row) => row.startsWith('accessToken='));
+
+    if (tokenCookie) {
+      const tokenValue = tokenCookie.split('=')[1];
+      if (tokenValue) {
+        setAccessToken(tokenValue);
+      }
+    }
+
     const loadGoogleScript = () => {
       const script = document.createElement('script');
       script.src = 'https://accounts.google.com/gsi/client';
@@ -34,9 +45,22 @@ function GmailEmails() {
       callback: (response) => {
         if (response.access_token) {
           setAccessToken(response.access_token);
+          storeTokenInCookie(response.access_token);
         }
       },
     });
+  };
+
+  // Helper to store token in a cookie
+  const storeTokenInCookie = (token) => {
+    const expirationDate = new Date();
+    expirationDate.setDate(expirationDate.getDate() + 1); // 1-day expiration
+    document.cookie = `accessToken=${token}; expires=${expirationDate.toUTCString()}; path=/`;
+  };
+
+  // Clear the cookie
+  const clearTokenCookie = () => {
+    document.cookie = `accessToken=; expires=${new Date(0).toUTCString()}; path=/`;
   };
 
   // Sign in and fetch the last 100 emails
@@ -48,6 +72,7 @@ function GmailEmails() {
         callback: (response) => {
           if (response.access_token) {
             setAccessToken(response.access_token);
+            storeTokenInCookie(response.access_token);
             fetchEmails(response.access_token);
           }
         },
@@ -60,12 +85,19 @@ function GmailEmails() {
 
   // Sign out and clear data
   const handleSignOut = () => {
-    if (window.google?.accounts.oauth2) {
+    if (window.google?.accounts.oauth2 && accessToken) {
       window.google.accounts.oauth2.revoke(accessToken, () => {
         setAccessToken(null);
         setEmails([]);
         setSummaries([]);
+        clearTokenCookie();
       });
+    } else {
+      // Fallback if nothing to revoke
+      setAccessToken(null);
+      setEmails([]);
+      setSummaries([]);
+      clearTokenCookie();
     }
   };
 
