@@ -6,6 +6,7 @@ import MeetingArranger from './components/MeetingArranger';
 import TaskScheduler from './components/TaskScheduler';
 import NotificationManager from './components/NotificationManager';
 import GmailEmails from './components/GmailEmails';
+import EmailSummarizer from './components/EmailSummarizer';
 
 /**
  * Main Application Component
@@ -137,6 +138,9 @@ function App() {
         <button onClick={() => setActiveTab('gmail')}>
           Gmail Summarizer
         </button>
+        <button onClick={() => setActiveTab('emailsummarizer')}>
+          Email Summarizer
+        </button>
         <button onClick={() => setActiveTab('notifications')}>
           Notifications
         </button>
@@ -147,6 +151,7 @@ function App() {
       )}
       {activeTab === 'tasks' && <TaskScheduler />}
       {activeTab === 'gmail' && <GmailEmails accessToken={accessToken} />}
+      {activeTab === 'emailsummarizer' && <EmailSummarizer accessToken={accessToken} />}
       {activeTab === 'notifications' && <NotificationManager />}
     </div>
   );

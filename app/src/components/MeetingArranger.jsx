@@ -33,14 +33,14 @@ function MeetingArranger({ accessToken }) {
         summary: title,
         start: {
           dateTime: startDateTime.toISOString(),
-          timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone, // Automatically detect user's timezone
+          timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
         },
         end: {
           dateTime: endDateTime.toISOString(),
           timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
         },
         attendees: details.participants
-          .filter((email) => email.includes('@')) // Simple email validation
+          .filter((email) => email.includes('@'))
           .map((email) => ({
             email,
           })),
