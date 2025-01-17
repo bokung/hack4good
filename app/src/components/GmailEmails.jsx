@@ -1,4 +1,6 @@
-import React, { useState, useEffect, useCallback } from 'react';
+// File Path: ./app/src/components/GmailEmails.jsx
+
+import React, { useState, useEffect } from 'react';
 import { generateSummary } from '../services/mockAi';
 
 const CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID;
@@ -10,7 +12,7 @@ function GmailEmails() {
   const [loadingSummaries, setLoadingSummaries] = useState(false);
   const [error, setError] = useState(null);
 
-  // Initialize Google Identity Services
+  // Load Google script once
   useEffect(() => {
     const loadGoogleScript = () => {
       const script = document.createElement('script');
@@ -25,6 +27,7 @@ function GmailEmails() {
   }, []);
 
   const initializeGoogleClient = () => {
+    // Initialize the token client
     window.google?.accounts.oauth2.initTokenClient({
       client_id: CLIENT_ID,
       scope: 'https://www.googleapis.com/auth/gmail.readonly',
@@ -36,6 +39,7 @@ function GmailEmails() {
     });
   };
 
+  // Sign in and fetch the last 100 emails
   const handleSignIn = () => {
     if (window.google?.accounts.oauth2) {
       const tokenClient = window.google.accounts.oauth2.initTokenClient({
@@ -54,6 +58,7 @@ function GmailEmails() {
     }
   };
 
+  // Sign out and clear data
   const handleSignOut = () => {
     if (window.google?.accounts.oauth2) {
       window.google.accounts.oauth2.revoke(accessToken, () => {
@@ -64,11 +69,12 @@ function GmailEmails() {
     }
   };
 
+  // Fetch up to 100 emails (message IDs)
   const fetchEmails = async (token) => {
+    setError(null);
     try {
-      // Fetch list of message IDs
       const listResponse = await fetch(
-        'https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=5',
+        'https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=100',
         {
           headers: {
             Authorization: `Bearer ${token}`,
@@ -76,13 +82,13 @@ function GmailEmails() {
         }
       );
       const listData = await listResponse.json();
-      
+
       if (!listData.messages) {
         setEmails([]);
         return;
       }
 
-      // Fetch details for each message
+      // For each message, fetch the snippet
       const emailPromises = listData.messages.map(async (message) => {
         const detailResponse = await fetch(
           `https://gmail.googleapis.com/gmail/v1/users/me/messages/${message.id}`,
@@ -98,12 +104,14 @@ function GmailEmails() {
 
       const emailSnippets = await Promise.all(emailPromises);
       setEmails(emailSnippets);
+      setSummaries([]); // Clear old summaries when new emails are fetched
     } catch (err) {
       console.error('Error fetching emails:', err);
       setError('Failed to fetch emails.');
     }
   };
 
+  // Generate a summary for each fetched email snippet
   const handleSummaries = async () => {
     setLoadingSummaries(true);
     setSummaries([]);
@@ -123,6 +131,7 @@ function GmailEmails() {
     setLoadingSummaries(false);
   };
 
+  // Re-fetch emails
   const refreshEmails = () => {
     if (accessToken) {
       fetchEmails(accessToken);
@@ -130,64 +139,83 @@ function GmailEmails() {
   };
 
   return (
-    <div className="border border-gray-300 p-4 mt-8">
-      <h2 className="text-xl font-bold mb-4">Gmail Integration (Front-End Only)</h2>
-      {error && <p className="text-red-500 mb-4">Error: {error}</p>}
+    <div style={{ border: '1px solid #ddd', padding: '1rem', marginTop: '1rem' }}>
+      <h2 style={{ fontSize: '1.25rem', marginBottom: '1rem' }}>
+        Gmail Integration (Up to 100 Emails)
+      </h2>
 
-      {!accessToken ? (
-        <div>
-          <p className="mb-4">You are not signed in.</p>
-          <button
-            onClick={handleSignIn}
-            className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600"
-          >
+      {error && <p style={{ color: 'red', marginBottom: '1rem' }}>Error: {error}</p>}
+
+      {/* Logged Out State */}
+      {!accessToken && (
+        <div style={{ marginBottom: '1rem' }}>
+          <p>You are not signed in.</p>
+          <button onClick={handleSignIn} style={{ marginRight: '1rem' }}>
             Sign In with Google
           </button>
         </div>
-      ) : (
+      )}
+
+      {/* Logged In State */}
+      {accessToken && (
         <div>
-          <p className="mb-4">You are signed in!</p>
-          <div className="flex gap-4 mb-4">
-            <button
-              onClick={handleSignOut}
-              className="bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600"
-            >
+          <p>You are signed in!</p>
+          <div style={{ margin: '1rem 0' }}>
+            <button onClick={handleSignOut} style={{ marginRight: '1rem' }}>
               Sign Out
             </button>
-            <button
-              onClick={refreshEmails}
-              className="bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600"
-            >
+            <button onClick={refreshEmails} style={{ marginRight: '1rem' }}>
               Refresh Emails
             </button>
           </div>
 
-          {emails.length > 0 && (
-            <>
-              <h3 className="text-lg font-semibold mt-4 mb-2">Email Snippets</h3>
-              <ul className="space-y-2 mb-4">
+          {/* Email List */}
+          {emails.length > 0 ? (
+            <div>
+              <h3 style={{ marginBottom: '0.5rem' }}>
+                Showing {emails.length} Email Snippets
+              </h3>
+              <ul style={{ paddingLeft: '1rem', marginBottom: '1rem' }}>
                 {emails.map((snippet, i) => (
-                  <li key={i} className="border-b pb-2">
+                  <li
+                    key={i}
+                    style={{
+                      borderBottom: '1px solid #ccc',
+                      marginBottom: '0.5rem',
+                      padding: '0.5rem 0',
+                    }}
+                  >
                     <strong>Email {i + 1}:</strong> {snippet}
                   </li>
                 ))}
               </ul>
+
               <button
                 onClick={handleSummaries}
                 disabled={loadingSummaries}
-                className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 disabled:bg-gray-400"
+                style={{ marginRight: '1rem' }}
               >
-                {loadingSummaries ? 'Summarizing...' : 'Summarize All'}
+                {loadingSummaries ? 'Summarizing...' : 'Summarize All Emails'}
               </button>
-            </>
+            </div>
+          ) : (
+            <p>No emails fetched yet.</p>
           )}
 
+          {/* Summaries List */}
           {summaries.length > 0 && (
-            <div className="mt-4">
-              <h3 className="text-lg font-semibold mb-2">Summaries</h3>
-              <ul className="space-y-2">
+            <div style={{ marginTop: '1rem' }}>
+              <h3 style={{ marginBottom: '0.5rem' }}>Summaries</h3>
+              <ul style={{ paddingLeft: '1rem' }}>
                 {summaries.map((summary, i) => (
-                  <li key={i} className="border-b pb-2">
+                  <li
+                    key={i}
+                    style={{
+                      borderBottom: '1px solid #ccc',
+                      marginBottom: '0.5rem',
+                      padding: '0.5rem 0',
+                    }}
+                  >
                     <strong>Summary {i + 1}:</strong> {summary}
                   </li>
                 ))}
