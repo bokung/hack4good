@@ -170,6 +170,19 @@ function GmailEmails() {
     }
   };
 
+  // Automatically poll for new emails every 5 seconds when signed in
+  useEffect(() => {
+    let intervalId;
+    if (accessToken) {
+      intervalId = setInterval(() => {
+        fetchEmails(accessToken);
+      }, 5000);
+    }
+    return () => {
+      if (intervalId) clearInterval(intervalId);
+    };
+  }, [accessToken]);
+
   return (
     <div style={{ border: '1px solid #ddd', padding: '1rem', marginTop: '1rem' }}>
       <h2 style={{ fontSize: '1.25rem', marginBottom: '1rem' }}>
