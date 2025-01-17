@@ -1,5 +1,3 @@
-// File Path: ./app/src/components/GmailEmails.jsx
-
 import React, { useState, useEffect } from 'react';
 import { generateSummary } from '../services/mockAi';
 import { decode } from 'js-base64';
@@ -59,6 +57,9 @@ function GmailEmails() {
   const [summaries, setSummaries] = useState([]);
   const [loadingSummaries, setLoadingSummaries] = useState(false);
   const [error, setError] = useState(null);
+
+  // Track which emails are expanded to show full content
+  const [expanded, setExpanded] = useState([]);
 
   // On component mount, attempt to read an existing token from the cookie
   useEffect(() => {
@@ -138,6 +139,7 @@ function GmailEmails() {
         setAccessToken(null);
         setEmails([]);
         setSummaries([]);
+        setExpanded([]);
         clearTokenCookie();
       });
     } else {
@@ -145,6 +147,7 @@ function GmailEmails() {
       setAccessToken(null);
       setEmails([]);
       setSummaries([]);
+      setExpanded([]);
       clearTokenCookie();
     }
   };
@@ -166,6 +169,7 @@ function GmailEmails() {
 
       if (!listData.messages) {
         setEmails([]);
+        setExpanded([]);
         return;
       }
 
@@ -196,6 +200,8 @@ function GmailEmails() {
 
       setEmails(sortedEmails);
       setSummaries([]); // Clear old summaries when new emails are fetched
+      // Initialize all emails as 'collapsed'
+      setExpanded(Array(sortedEmails.length).fill(false));
     } catch (err) {
       console.error('Error fetching emails:', err);
       setError('Failed to fetch emails.');
@@ -230,18 +236,14 @@ function GmailEmails() {
     }
   };
 
-  // // Automatically poll for new emails every 5 seconds when signed in
-  // useEffect(() => {
-  //   let intervalId;
-  //   if (accessToken) {
-  //     intervalId = setInterval(() => {
-  //       fetchEmails(accessToken);
-  //     }, 5000);
-  //   }
-  //   return () => {
-  //     if (intervalId) clearInterval(intervalId);
-  //   };
-  // }, [accessToken]);
+  // Toggle expanded/collapsed state for a given email
+  const handleToggle = (index) => {
+    setExpanded((prev) => {
+      const updated = [...prev];
+      updated[index] = !updated[index];
+      return updated;
+    });
+  };
 
   return (
     <div style={{ border: '1px solid #ddd', padding: '1rem', marginTop: '1rem' }}>
@@ -274,11 +276,23 @@ function GmailEmails() {
             </button>
           </div>
 
-          {/* Email List */}
+          {/* Move Summarize All Emails button to the top (before the list) */}
+          {emails.length > 0 && (
+            <div style={{ marginBottom: '1rem' }}>
+              <button
+                onClick={handleSummaries}
+                disabled={loadingSummaries}
+                style={{ marginRight: '1rem' }}
+              >
+                {loadingSummaries ? 'Summarizing...' : 'Summarize All Emails'}
+              </button>
+            </div>
+          )}
+
           {emails.length > 0 ? (
             <div>
               <h3 style={{ marginBottom: '0.5rem' }}>
-                Showing {emails.length} Email Snippets
+                Showing {emails.length} Email{emails.length === 1 ? '' : 's'}
               </h3>
               <ul style={{ paddingLeft: '1rem', marginBottom: '1rem' }}>
                 {emails.map((emailObj, i) => (
@@ -290,18 +304,29 @@ function GmailEmails() {
                       padding: '0.5rem 0',
                     }}
                   >
-                    <strong>Email {i + 1}:</strong> {emailObj.snippet}
+                    <strong>Email {i + 1} (Snippet):</strong> {emailObj.snippet}
+                    <div style={{ marginTop: '0.5rem' }}>
+                      <button onClick={() => handleToggle(i)}>
+                        {expanded[i] ? 'Hide Full Email' : 'Show Full Email'}
+                      </button>
+                    </div>
+
+                    {expanded[i] && (
+                      <div
+                        style={{
+                          marginTop: '0.5rem',
+                          padding: '0.5rem',
+                          background: '#f9f9f9',
+                          whiteSpace: 'pre-wrap',
+                        }}
+                      >
+                        <strong>Full Email Content:</strong>
+                        <div>{emailObj.body}</div>
+                      </div>
+                    )}
                   </li>
                 ))}
               </ul>
-
-              <button
-                onClick={handleSummaries}
-                disabled={loadingSummaries}
-                style={{ marginRight: '1rem' }}
-              >
-                {loadingSummaries ? 'Summarizing...' : 'Summarize All Emails'}
-              </button>
             </div>
           ) : (
             <p>No emails fetched yet.</p>
