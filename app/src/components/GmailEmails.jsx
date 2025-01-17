@@ -2,28 +2,21 @@ import React, { useState, useEffect } from 'react';
 import { generateSummary } from '../services/mockAi';
 import { decode } from 'js-base64';
 
-const CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID;
+// The sign-in/out logic and the Google script loading
+// have been moved into App.jsx. Now we just consume
+// the `accessToken` passed in as a prop.
 
-/**
- * Retrieve the full text/plain body from the Gmail API's message payload.
- * Fallback to snippet if there isn't a text/plain part.
- */
 function extractFullEmailBody(detailData) {
   if (!detailData.payload) {
-    // Fallback to snippet if there's no payload
     return detailData.snippet || '(No content)';
   }
 
-  // If the message has multiple parts, look for the text/plain part
   const parts = detailData.payload.parts;
   if (parts && parts.length > 0) {
-    // Attempt to locate a text/plain part
     for (const part of parts) {
       if (part.mimeType === 'text/plain' && part.body && part.body.data) {
-        // Decode the Base64-URL-encoded message
         return decode(part.body.data.replace(/-/g, '+').replace(/_/g, '/'));
       }
-      // Some emails nest parts recursively
       if (part.parts && part.parts.length > 0) {
         for (const nestedPart of part.parts) {
           if (
@@ -40,123 +33,33 @@ function extractFullEmailBody(detailData) {
     }
   }
 
-  // If there's a single-part email in the body
   if (detailData.payload.body && detailData.payload.body.data) {
     return decode(
       detailData.payload.body.data.replace(/-/g, '+').replace(/_/g, '/')
     );
   }
 
-  // If no text/plain content was found, fallback to snippet
   return detailData.snippet || '(No content)';
 }
 
-function GmailEmails() {
-  const [accessToken, setAccessToken] = useState(null);
+const GmailEmails = ({ accessToken }) => {
   const [emails, setEmails] = useState([]);
   const [summaries, setSummaries] = useState([]);
   const [loadingSummaries, setLoadingSummaries] = useState(false);
   const [error, setError] = useState(null);
-
-  // Track which emails are expanded to show full content
   const [expanded, setExpanded] = useState([]);
 
-  // On component mount, attempt to read an existing token from the cookie
+  // If user is signed in, fetch emails on mount
   useEffect(() => {
-    const tokenCookie = document.cookie
-      .split('; ')
-      .find((row) => row.startsWith('accessToken='));
-
-    if (tokenCookie) {
-      const tokenValue = tokenCookie.split('=')[1];
-      if (tokenValue) {
-        setAccessToken(tokenValue);
-      }
+    if (accessToken) {
+      fetchEmails(accessToken);
     }
+  }, [accessToken]);
 
-    const loadGoogleScript = () => {
-      const script = document.createElement('script');
-      script.src = 'https://accounts.google.com/gsi/client';
-      script.async = true;
-      script.defer = true;
-      script.onload = initializeGoogleClient;
-      document.body.appendChild(script);
-    };
-
-    loadGoogleScript();
-  }, []);
-
-  const initializeGoogleClient = () => {
-    // Initialize the token client
-    window.google?.accounts.oauth2.initTokenClient({
-      client_id: CLIENT_ID,
-      scope: 'https://www.googleapis.com/auth/gmail.readonly',
-      callback: (response) => {
-        if (response.access_token) {
-          setAccessToken(response.access_token);
-          storeTokenInCookie(response.access_token);
-        }
-      },
-    });
-  };
-
-  // Helper to store token in a cookie
-  const storeTokenInCookie = (token) => {
-    const expirationDate = new Date();
-    expirationDate.setDate(expirationDate.getDate() + 1); // 1-day expiration
-    document.cookie = `accessToken=${token}; expires=${expirationDate.toUTCString()}; path=/`;
-  };
-
-  // Clear the cookie
-  const clearTokenCookie = () => {
-    document.cookie = `accessToken=; expires=${new Date(0).toUTCString()}; path=/`;
-  };
-
-  // Sign in and fetch the last 100 emails
-  const handleSignIn = () => {
-    if (window.google?.accounts.oauth2) {
-      const tokenClient = window.google.accounts.oauth2.initTokenClient({
-        client_id: CLIENT_ID,
-        scope: 'https://www.googleapis.com/auth/gmail.readonly',
-        callback: (response) => {
-          if (response.access_token) {
-            setAccessToken(response.access_token);
-            storeTokenInCookie(response.access_token);
-            fetchEmails(response.access_token);
-          }
-        },
-      });
-      tokenClient.requestAccessToken();
-    } else {
-      setError('Google Identity Services not loaded');
-    }
-  };
-
-  // Sign out and clear data
-  const handleSignOut = () => {
-    if (window.google?.accounts.oauth2 && accessToken) {
-      window.google.accounts.oauth2.revoke(accessToken, () => {
-        setAccessToken(null);
-        setEmails([]);
-        setSummaries([]);
-        setExpanded([]);
-        clearTokenCookie();
-      });
-    } else {
-      // Fallback if nothing to revoke
-      setAccessToken(null);
-      setEmails([]);
-      setSummaries([]);
-      setExpanded([]);
-      clearTokenCookie();
-    }
-  };
-
-  // Fetch up to 100 inbox emails (message IDs)
+  // Fetch up to 10 (or 100) inbox emails
   const fetchEmails = async (token) => {
     setError(null);
     try {
-      // Request the latest 100 messages in the INBOX
       const listResponse = await fetch(
         'https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=10&labelIds=INBOX',
         {
@@ -173,7 +76,6 @@ function GmailEmails() {
         return;
       }
 
-      // For each message, fetch the detail (snippet + internalDate + full body)
       const emailPromises = listData.messages.map(async (message) => {
         const detailResponse = await fetch(
           `https://gmail.googleapis.com/gmail/v1/users/me/messages/${message.id}`,
@@ -184,23 +86,20 @@ function GmailEmails() {
           }
         );
         const detailData = await detailResponse.json();
-
         return {
           snippet: detailData.snippet || '(No snippet)',
           internalDate: parseInt(detailData.internalDate, 10) || 0,
-          body: extractFullEmailBody(detailData), // <--- Full body extracted here
+          body: extractFullEmailBody(detailData),
         };
       });
 
-      // Wait for all details, then sort by `internalDate` descending (newest first)
       const emailDetails = await Promise.all(emailPromises);
       const sortedEmails = emailDetails.sort(
         (a, b) => b.internalDate - a.internalDate
       );
 
       setEmails(sortedEmails);
-      setSummaries([]); // Clear old summaries when new emails are fetched
-      // Initialize all emails as 'collapsed'
+      setSummaries([]);
       setExpanded(Array(sortedEmails.length).fill(false));
     } catch (err) {
       console.error('Error fetching emails:', err);
@@ -208,7 +107,14 @@ function GmailEmails() {
     }
   };
 
-  // Generate a summary for each fetched email's body
+  // Re-fetch emails
+  const refreshEmails = () => {
+    if (accessToken) {
+      fetchEmails(accessToken);
+    }
+  };
+
+  // Summarize each email
   const handleSummaries = async () => {
     setLoadingSummaries(true);
     setSummaries([]);
@@ -216,7 +122,6 @@ function GmailEmails() {
 
     for (const emailObj of emails) {
       try {
-        // Pass the full body instead of just the snippet
         const summary = await generateSummary(emailObj.body);
         newSummaries.push(summary);
       } catch (err) {
@@ -229,13 +134,6 @@ function GmailEmails() {
     setLoadingSummaries(false);
   };
 
-  // Re-fetch emails
-  const refreshEmails = () => {
-    if (accessToken) {
-      fetchEmails(accessToken);
-    }
-  };
-
   // Toggle expanded/collapsed state for a given email
   const handleToggle = (index) => {
     setExpanded((prev) => {
@@ -245,117 +143,110 @@ function GmailEmails() {
     });
   };
 
+  // Show a message if not signed in
+  if (!accessToken) {
+    return (
+      <div style={{ border: '1px solid #ddd', padding: '1rem', marginTop: '1rem' }}>
+        <h2>Gmail Account Integration</h2>
+        <p>Please sign in to see your latest emails.</p>
+      </div>
+    );
+  }
+
   return (
     <div style={{ border: '1px solid #ddd', padding: '1rem', marginTop: '1rem' }}>
       <h2 style={{ fontSize: '1.25rem', marginBottom: '1rem' }}>
-        Gmail Account Integration (Latest 100 Emails in Your Inbox)
+        Gmail Account Integration (Latest Emails in Your Inbox)
       </h2>
 
-      {error && <p style={{ color: 'red', marginBottom: '1rem' }}>Error: {error}</p>}
+      {error && (
+        <p style={{ color: 'red', marginBottom: '1rem' }}>
+          Error: {error}
+        </p>
+      )}
 
-      {/* Logged Out State */}
-      {!accessToken && (
+      <div style={{ margin: '1rem 0' }}>
+        <button onClick={refreshEmails} style={{ marginRight: '1rem' }}>
+          Refresh Emails
+        </button>
+      </div>
+
+      {emails.length > 0 && (
         <div style={{ marginBottom: '1rem' }}>
-          <p>You are not signed in.</p>
-          <button onClick={handleSignIn} style={{ marginRight: '1rem' }}>
-            Sign In with Google
+          <button
+            onClick={handleSummaries}
+            disabled={loadingSummaries}
+            style={{ marginRight: '1rem' }}
+          >
+            {loadingSummaries ? 'Summarizing...' : 'Summarize All Emails'}
           </button>
         </div>
       )}
 
-      {/* Logged In State */}
-      {accessToken && (
+      {emails.length > 0 ? (
         <div>
-          <p>You are signed in!</p>
-          <div style={{ margin: '1rem 0' }}>
-            <button onClick={handleSignOut} style={{ marginRight: '1rem' }}>
-              Sign Out
-            </button>
-            <button onClick={refreshEmails} style={{ marginRight: '1rem' }}>
-              Refresh Emails
-            </button>
-          </div>
-
-          {/* Move Summarize All Emails button to the top (before the list) */}
-          {emails.length > 0 && (
-            <div style={{ marginBottom: '1rem' }}>
-              <button
-                onClick={handleSummaries}
-                disabled={loadingSummaries}
-                style={{ marginRight: '1rem' }}
+          <h3 style={{ marginBottom: '0.5rem' }}>
+            Showing {emails.length} Email{emails.length === 1 ? '' : 's'}
+          </h3>
+          <ul style={{ paddingLeft: '1rem', marginBottom: '1rem' }}>
+            {emails.map((emailObj, i) => (
+              <li
+                key={i}
+                style={{
+                  borderBottom: '1px solid #ccc',
+                  marginBottom: '0.5rem',
+                  padding: '0.5rem 0',
+                }}
               >
-                {loadingSummaries ? 'Summarizing...' : 'Summarize All Emails'}
-              </button>
-            </div>
-          )}
+                <strong>Email {i + 1} (Snippet):</strong> {emailObj.snippet}
+                <div style={{ marginTop: '0.5rem' }}>
+                  <button onClick={() => handleToggle(i)}>
+                    {expanded[i] ? 'Hide Full Email' : 'Show Full Email'}
+                  </button>
+                </div>
 
-          {emails.length > 0 ? (
-            <div>
-              <h3 style={{ marginBottom: '0.5rem' }}>
-                Showing {emails.length} Email{emails.length === 1 ? '' : 's'}
-              </h3>
-              <ul style={{ paddingLeft: '1rem', marginBottom: '1rem' }}>
-                {emails.map((emailObj, i) => (
-                  <li
-                    key={i}
+                {expanded[i] && (
+                  <div
                     style={{
-                      borderBottom: '1px solid #ccc',
-                      marginBottom: '0.5rem',
-                      padding: '0.5rem 0',
+                      marginTop: '0.5rem',
+                      padding: '0.5rem',
+                      background: '#f9f9f9',
+                      whiteSpace: 'pre-wrap',
                     }}
                   >
-                    <strong>Email {i + 1} (Snippet):</strong> {emailObj.snippet}
-                    <div style={{ marginTop: '0.5rem' }}>
-                      <button onClick={() => handleToggle(i)}>
-                        {expanded[i] ? 'Hide Full Email' : 'Show Full Email'}
-                      </button>
-                    </div>
+                    <strong>Full Email Content:</strong>
+                    <div>{emailObj.body}</div>
+                  </div>
+                )}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : (
+        <p>No emails fetched yet.</p>
+      )}
 
-                    {expanded[i] && (
-                      <div
-                        style={{
-                          marginTop: '0.5rem',
-                          padding: '0.5rem',
-                          background: '#f9f9f9',
-                          whiteSpace: 'pre-wrap',
-                        }}
-                      >
-                        <strong>Full Email Content:</strong>
-                        <div>{emailObj.body}</div>
-                      </div>
-                    )}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ) : (
-            <p>No emails fetched yet.</p>
-          )}
-
-          {/* Summaries List */}
-          {summaries.length > 0 && (
-            <div style={{ marginTop: '1rem' }}>
-              <h3 style={{ marginBottom: '0.5rem' }}>Summaries</h3>
-              <ul style={{ paddingLeft: '1rem' }}>
-                {summaries.map((summary, i) => (
-                  <li
-                    key={i}
-                    style={{
-                      borderBottom: '1px solid #ccc',
-                      marginBottom: '0.5rem',
-                      padding: '0.5rem 0',
-                    }}
-                  >
-                    <strong>Summary {i + 1}:</strong> {summary}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
+      {summaries.length > 0 && (
+        <div style={{ marginTop: '1rem' }}>
+          <h3 style={{ marginBottom: '0.5rem' }}>Summaries</h3>
+          <ul style={{ paddingLeft: '1rem' }}>
+            {summaries.map((summary, i) => (
+              <li
+                key={i}
+                style={{
+                  borderBottom: '1px solid #ccc',
+                  marginBottom: '0.5rem',
+                  padding: '0.5rem 0',
+                }}
+              >
+                <strong>Summary {i + 1}:</strong> {summary}
+              </li>
+            ))}
+          </ul>
         </div>
       )}
     </div>
   );
-}
+};
 
 export default GmailEmails;
