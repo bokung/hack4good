@@ -5,7 +5,6 @@ import { useState } from 'react'
 import MeetingArranger from './components/MeetingArranger'
 import TaskScheduler from './components/TaskScheduler'
 import NotificationManager from './components/NotificationManager'
-import EmailSummarizer from './components/EmailSummarizer'
 import GmailEmails from './components/GmailEmails';
 
 function App() {
@@ -18,16 +17,14 @@ function App() {
       <nav style={{ marginBottom: '2rem' }}>
         <button onClick={() => setActiveTab('meeting')}>Arrange Meeting</button>
         <button onClick={() => setActiveTab('tasks')}>Task Scheduler</button>
-        <button onClick={() => setActiveTab('summarizer')}>Email Summarizer</button>
+        <button onClick={() => setActiveTab('gmail')}>Gmail Summarizer</button>
         <button onClick={() => setActiveTab('notifications')}>Notifications</button>
-        <button onClick={() => setActiveTab('gmail')}>Gmail Emails</button>
       </nav>
 
       {activeTab === 'meeting' && <MeetingArranger />}
       {activeTab === 'tasks' && <TaskScheduler />}
-      {activeTab === 'summarizer' && <EmailSummarizer />}
-      {activeTab === 'notifications' && <NotificationManager />}
       {activeTab === 'gmail' && <GmailEmails />}
+      {activeTab === 'notifications' && <NotificationManager />}
     </div>
   )
 }
